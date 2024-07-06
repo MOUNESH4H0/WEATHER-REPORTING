@@ -11,3 +11,4 @@ DHT11 Temperature Sensor
 BMP180 Barometric Pressure Sensor
 YL-83 Rain Sensor
 Hardware Setup
+![image](https://github.com/MOUNESH4H0/WEATHER-REPORTING/assets/153296055/ab29d1a4-0fd4-41ab-b86b-0e7284699fd0)
