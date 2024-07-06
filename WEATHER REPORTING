@@ -1,0 +1,112 @@
+import sys
+from urllib.request import urlopen
+import RPi.GPIO as GPIO
+import bmpsensor
+from time import sleep
+import requests
+
+# Constants for GPIO pins
+RAIN_SENSOR_CHANNEL = 26
+LED_PIN = 21
+ACTUATOR_PIN1 = 23
+ACTUATOR_PIN2 = 24
+
+# ThingSpeak API
+API_KEY = 'F6CJSTUTJ2S1WE9Q'
+BASE_URL = f'https://api.thingspeak.com/update?api_key={API_KEY}'
+READ_API_KEY = 'VEGUER776SBMMPN8'
+CHANNEL_ID = 1369893
+
+def setup_gpio():
+    GPIO.setwarnings(False)
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(RAIN_SENSOR_CHANNEL, GPIO.IN)
+    GPIO.setup(LED_PIN, GPIO.OUT, initial=GPIO.LOW)
+    GPIO.setup(ACTUATOR_PIN1, GPIO.OUT, initial=GPIO.LOW)
+    GPIO.setup(ACTUATOR_PIN2, GPIO.OUT, initial=GPIO.LOW)
+
+def bmp_data():
+    temp, press, alt = bmpsensor.readBmp180()
+    return temp, press, alt
+
+def update_thingspeak(temp, press, rain):
+    try:
+        conn = urlopen(BASE_URL + f'&field1={temp}&field2={press}&field4={rain}')
+        response = conn.read()
+        conn.close()
+        return response
+    except Exception as e:
+        print(f"Error updating ThingSpeak: {e}")
+        return None
+
+def get_average_temperature():
+    try:
+        url = f'https://api.thingspeak.com/channels/{CHANNEL_ID}/fields/1.json?api_key={READ_API_KEY}&results=1'
+        data = requests.get(url).json()
+        return float(data['feeds'][0]['field1'])
+    except Exception as e:
+        print(f"Error getting average temperature: {e}")
+        return None
+
+def get_average_pressure():
+    try:
+        url = f'https://api.thingspeak.com/channels/{CHANNEL_ID}/fields/2.json?api_key={READ_API_KEY}&results=1'
+        data = requests.get(url).json()
+        return float(data['feeds'][0]['field2'])
+    except Exception as e:
+        print(f"Error getting average pressure: {e}")
+        return None
+
+def main():
+    setup_gpio()
+    for x in range(5):
+        temp, press, alt = bmp_data()
+        print('WEATHER MONITORING SYSTEM - PROJECT 1')
+        print('-------------------------------------------------------')
+        print(f"Temperature: {temp:.2f} C")
+        print(f"Pressure: {press / 100.0:.2f} hPa")
+
+        if GPIO.input(RAIN_SENSOR_CHANNEL):
+            rain = 0
+            print('No Rain')
+            GPIO.output(LED_PIN, 0)
+        else:
+            rain = 1
+            print('Raining!')
+            GPIO.output(LED_PIN, 1)
+            sleep(1)
+            GPIO.output(LED_PIN, 0)
+            sleep(1)
+            GPIO.output(LED_PIN, 1)
+
+        response = update_thingspeak(temp, press, rain)
+        if response:
+            print(response)
+
+        avg_temp = get_average_temperature()
+        if avg_temp is not None:
+            print(f'Average Temperature: {avg_temp}')
+            if avg_temp > 28:
+                print("It's a VERY hot day")
+                GPIO.output(ACTUATOR_PIN1, 1)
+                GPIO.output(ACTUATOR_PIN2, 0)
+            else:
+                print("It's a Normal day")
+                GPIO.output(ACTUATOR_PIN2, 1)
+                GPIO.output(ACTUATOR_PIN1, 0)
+
+        avg_press = get_average_pressure()
+        if avg_press is not None:
+            print(f'Average Pressure: {avg_press}')
+            if avg_press < 970:
+                print("It's a windy day")
+                GPIO.output(LED_PIN, 1)
+
+        sleep(30)
+        GPIO.output(ACTUATOR_PIN1, 0)
+        GPIO.output(ACTUATOR_PIN2, 0)
+        GPIO.output(LED_PIN, 0)
+        print('-------------------------------------------------------')
+
+if __name__ == "__main__":
+    main()
